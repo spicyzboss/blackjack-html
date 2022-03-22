@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/spicyz/fakrube/main/x32.png">
+    <title>Blackjack</title>
+    <link href="https://unpkg.com/nes.css@latest/css/nes.min.css" rel="stylesheet" />
+</head>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    body{
+        font-family: 'Press Start 2P', cursive;
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background-image: url("https://i.redd.it/rrhjaimewzu21.png");
+        /* background-size: cover; */
+        background-position: top;
+    }
+    .card{
+        border: 5px solid black;
+        border-radius: 13px;
+        width: 180px;
+        height: 252px;
+        margin: 0.5em;
+    }
+    #game{
+        /* background-color: black; */
+        margin: 0 2em 0 2em;
+        grid-column: 1 / -1;
+        display: flex;
+        justify-content: space-between;
+    }
+    #dealer{
+        /* border-left: 0.6em solid red;
+        background: hsla(0, 100%, 50%, 0.2); */
+    }
+    #player{
+        text-align: right;
+        /* border-right: 0.6em solid blue;
+        background: hsla(180, 100%, 50%, 0.2); */
+    }
+    #dealer h1.pos, #dealer h1.score{
+        margin-left: 0.6em;
+    }
+    #player h1.pos, #player h1.score{
+        margin-right: 0.6em;
+    }
+    #play{
+        display: flex;
+        justify-content: center;
+    }
+    .hide{
+        content: url("https://raw.githubusercontent.com/spicyz/fakrube/main/-1.png");
+    }
+    .center{
+        display: flex;
+        justify-content: center;
+    }
+    .nes-dialog{
+        padding: 3em;
+    }
+    .nes-btn{
+        margin: 1em;
+        padding: 1.3em;
+    }
+    #gamePlay{
+        display: flex;
+        flex-direction: column;
+        align-content: space-between;
+    }
+    .title{
+        text-align: center;
+        font-size: 4em;
+        margin-top: 0.8em;
+        margin-bottom: 5px;;
+    }
+</style>
+<body>
+    <div id="container">
+        <dialog class="nes-dialog is-dark is-rounded" id="startDialog">
+            <form method="dialog">
+                <p class="nes-text is-primary" style="font-size: 2.5em;">Hi there!</p>
+                <p class="nes-text">Yes you. Are you a knight that come to help the princess? Okay listen you need more lucky to help her 'cause this demon is a golden hand dealer, No body can defeat him.
+                    You must use your skill of blackjack to defeat him. It your times!</p>
+                <div class="dialog-menu center">
+                    <button class="nes-btn is-error" onclick=closeDialog()>Close</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog class="nes-dialog is-dark is-rounded" id="gameOver">
+            <form method="dialog">
+                <p class="title nes-text is-error">Game Over</p>
+                <div class="dialog-menu center">
+                    <button class="nes-btn is-error" onclick=gameReset()>Restart</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog class="nes-dialog is-dark is-rounded" id="gameWins">
+            <form method="dialog">
+                <p class="title nes-text is-warning">Congratulations!</p>
+                <div class="dialog-menu center">
+                    <button class="nes-btn is-success" onclick=gameReset()>Confirm</button>
+                </div>
+            </form>
+        </dialog>
+        <dialog class="nes-dialog is-dark is-rounded" id="gameDraw">
+            <form method="dialog">
+                <p class="title nes-text is-primary">Draw</p>
+                <div class="dialog-menu center">
+                    <button class="nes-btn is-primary" onclick=gameReset()>Play again</button>
+                </div>
+            </form>
+        </dialog>
+        <div id="info">
+            <h1 class="title" style="text-decoration: underline;">BLACKJACK</h1>
+        </div>
+        <div id="gamePlay">
+            <div id="game">
+                <div id="dealer" class="nes-container is-rounded is-dark">
+                    <h1 class="pos nes-text is-error">Dealer</h1>
+                    <h1 class="score" id="dscore">0</h1>
+                    <div id="dh"></div>
+                </div>
+                <div id="player" class="nes-container is-rounded is-dark">
+                    <h1 class="pos nes-text is-primary">Player</h1>
+                    <h1 class="score" id="pscore">0</h1>
+                    <div id="ph"></div>
+                </div>
+            </div>
+            <div id="play">
+                <button class="nes-btn is-success" id="pdeal" onclick=playerDeal()>Hit</button>
+                <button class="nes-btn is-error" id="pstand" onclick=playerStand()>Stand</button>
+            </div>
+        </div>
+    </div>
+</body>
+<script>
+    const suit = ["Spade", "Heart", "Diamond", "Club"];
+    const number = ["A", 2, 3, 4, 5, 6, 7, 8, 9, 10, "J", "Q", "K"];
+    var deck = [];
+    var playerHand = [], dealerHand = [];
+    var pStand = false, dStand = false;
+    var startContent = false;
+
+    startDialog = () => {
+        if (!startContent){
+            document.querySelector("#startDialog").showModal();
+        }
+    }
+    closeDialog = () => {
+        startContent = true;
+        gameInitialize();
+    }
+    playerWins = () => {
+        document.querySelector("#gameWins").showModal();
+    }
+    dealerWins = () => {
+        document.querySelector("#gameOver").showModal();
+    }
+    draw = () => {
+        document.querySelector("#gameDraw").showModal();
+    }
+    gameResult = () => {
+        if (pStand && dStand){
+            var dScore = getDealerScore();
+            var pScore = getPlayerScore();
+            if (dScore > pScore){
+                setTimeout(dealerWins, 500);
+            } else if (pScore > dScore){
+                setTimeout(playerWins, 500);
+            } else{
+                setTimeout(draw, 500);
+            }
+        }
+    }
+    checkPlayerHands = () => {
+        if (getPlayerScore() > 21){
+            playerStand();
+            dealerStand();
+            setTimeout(dealerWins, 500);
+        }
+    }
+    checkDealerHands = () => {
+        if (getDealerScore() > 21){
+            dealerStand();
+            setTimeout(playerWins, 500);
+        }
+    }
+    dealerBot = () => {
+        document.querySelector(".hide").classList.remove("hide");
+        document.querySelector("#dscore").innerHTML = getDealerScore();
+        while (getDealerScore() < 18){
+            dealerDeal();
+        }
+        if (getDealerScore() >= 18){
+            dealerStand();
+            if (getDealerScore() > 21){
+                checkDealerHands();
+            } else{
+                gameResult();
+            }
+        }
+    }
+    createDeck = () => {
+        var pictCount = 0;
+        for (let i=0;i<suit.length;i++){
+            for (let j=0;j<number.length;j++){
+                if (!(typeof(number[j]) === "number")){
+                    var card = {
+                        "Number": number[j],
+                        "Suit": suit[i],
+                        "Img": "https://raw.githubusercontent.com/spicyz/fakrube/main/" + pictCount + ".gif"
+                    };
+                } else{
+                    var card = {
+                        "Number": number[j],
+                        "Suit": suit[i],
+                        "Img": "https://raw.githubusercontent.com/spicyz/fakrube/main/" + pictCount + ".png"
+                    };
+                }
+                deck.push(card);
+                pictCount++;
+            }
+        }
+    }
+    shuffleDeck = () => {
+        for (let i=deck.length-1;i>0;i--){
+            var rand = Math.floor(Math.random() * i);
+            var temp = deck[i];
+            deck[i] = deck[rand];
+            deck[rand] = temp;
+        }
+    }
+    updatePlayerHand = (card) => {
+        var showHands = document.querySelector("#ph");
+        var img = document.createElement("img");
+        img.src = card.Img;
+        img.setAttribute("class", "card");
+        showHands.appendChild(img);
+    }
+    updateDealerHand = (card) => {
+        var showHands = document.querySelector("#dh");
+        var img = document.createElement("img");
+        img.src = card.Img;
+        img.setAttribute("class", "card");
+        showHands.appendChild(img);
+    }
+    hiddenCard = (card) => {
+        var showHands = document.querySelector("#dh");
+        var img = document.createElement("img");
+        img.src = card.Img;
+        img.setAttribute("class", "card hide");
+        showHands.appendChild(img);
+    }
+    playerDeal = () => {
+        if (!(pStand)){
+            playerHand.push(deck[deck.length-1]);
+            updatePlayerHand(playerHand[playerHand.length-1]);
+            deck.pop();
+            document.querySelector("#pscore").innerHTML = getPlayerScore();
+            checkPlayerHands();
+        }
+    }
+    dealerDeal = () => {
+        if (!(dStand)){
+            dealerHand.push(deck[deck.length-1]);
+            if (dealerHand.length == 2 && pStand == false){
+                hiddenCard(dealerHand[dealerHand.length-1]);
+                var score = getDealerScore();
+                var x = dealerHand[1].Number;
+                if (x == "A"){
+                    score -= 11;
+                } else if (x == "J" || x == "Q" || x == "K"){
+                    score -= 10;
+                } else {
+                    score -= x;
+                }
+                document.querySelector("#dscore").innerHTML = score;
+            } else{
+                updateDealerHand(dealerHand[dealerHand.length-1]);
+                document.querySelector("#dscore").innerHTML = getDealerScore();
+            }
+            deck.pop();
+        }
+    }
+    getPlayerScore = () => {
+        var score = 0;
+        var playerAce = 0;
+        for (let i=0;i<playerHand.length;i++){
+            var x = playerHand[i].Number;
+            if (x == "A"){
+                score += 11;
+                playerAce += 1;
+            } else if (x == "J" || x == "Q" || x == "K"){
+                score += 10;
+            } else {
+                score += x;
+            }
+        }
+        while (score > 21 && playerAce > 0){
+            playerAce -= 1;
+            score -= 10;
+        }
+        return score;
+    }
+    getDealerScore = () => {
+        var score = 0;
+        var dealerAce = 0;
+        for (let i=0;i<dealerHand.length;i++){
+            var x = dealerHand[i].Number;
+            if (x == "A"){
+                score += 11;
+                dealerAce += 1;
+            } else if (x == "J" || x == "Q" || x == "K"){
+                score += 10;
+            } else {
+                score += x;
+            }
+        }
+        while (score > 21 && dealerAce > 0){
+            dealerAce -= 1;
+            score -= 10;
+        }
+        return score;
+    }
+    playerStand = () => {
+        pStand = true;
+        if (getPlayerScore() <= 21){
+            dealerBot();
+        }
+    }
+    dealerStand = () => {
+        dStand = true;
+    }
+    clearPlayerHand = () => {
+        playerHand = [];
+        document.querySelector("#ph").innerHTML = "";
+    }
+    clearDealerHand = () => {
+        dealerHand = [];
+        document.querySelector("#dh").innerHTML = "";
+    }
+    gameInitialize = () => {
+        createDeck();
+        shuffleDeck();
+        clearDealerHand();
+        clearPlayerHand();
+        playerDeal();
+        dealerDeal();
+        playerDeal();
+        dealerDeal();
+    }
+    gameReset = () => {
+        deck = [];
+        playerHand = [], dealerHand = [];
+        pStand = false, dStand = false;
+        gameInitialize();
+    }
+    run = () => {
+        startDialog();
+    }
+
+    run();
+</script>
+</html>
